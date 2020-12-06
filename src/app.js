@@ -131,7 +131,6 @@ const Timer = ( {
 ReactDOM.render( <Timer />, document.getElementById( 'root' ) );
 
 Circle.propTypes = {
-  children: PropTypes.element.isRequired,
   size: PropTypes.number,
   fontSize: PropTypes.number,
   bgColor: PropTypes.string,
@@ -157,4 +156,4 @@ Timer.propTypes = {
   setReset: PropTypes.func
 };
 
-ReactDOM.render( timer, document.getElementById( 'root' ) );
+ReactDOM.render( <Timer />, document.getElementById( 'root' ) );

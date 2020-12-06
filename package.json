@@ -8,7 +8,7 @@
     "url": "https://github.com/natashabuck/simple-circle-timer"
   },
   "private": false,
-  "main": "bundle.js",
+  "main": "./public/bundle.js",
   "files": [
     "public",
     "README.md"
