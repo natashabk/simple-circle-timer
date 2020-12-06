@@ -1,5 +1,4 @@
 import React, { useState, useEffect } from 'react'
-import ReactDOM from 'react-dom'
 import PropTypes from 'prop-types';
 import './styles/styles.css';
 let timeAtPause = 0;
@@ -128,8 +127,6 @@ const Timer = ( {
   )
 };
 
-ReactDOM.render( <Timer />, document.getElementById( 'root' ) );
-
 Circle.propTypes = {
   size: PropTypes.number,
   fontSize: PropTypes.number,
@@ -156,4 +153,4 @@ Timer.propTypes = {
   setReset: PropTypes.func
 };
 
-ReactDOM.render( <Timer />, document.getElementById( 'root' ) );
+export default Timer;
