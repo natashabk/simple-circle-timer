@@ -1,31 +1,33 @@
 import React from 'react'
 import PropTypes from 'prop-types';
 import Circle from './Circle';
+import { useTimer } from '../hooks/useTimer'
+import './circle.css';
 
 const Timer = ( props ) => {
-  const { size, fontSize, minutes, fillColor, bgColor, showMs, onComplete } = props
-  const { completeMsg, running, setRunning, timeAtLoad, reset, setReset } = props
-  // const { timeLeft, completed } = useTimer( minutes, running, timeAtLoad )
+  const { minutes, running, setRunning, timeAtLoad, reset, setReset, showMs } = props
+  const { timeLeft, completed } = useTimer( minutes, running, setRunning, timeAtLoad, reset, setReset )
 
-  // if ( completed ) onComplete();
-  const timeLeft = 10000 //delete once custom hooks are working
+  if ( completed ) props.onComplete();
+
+  let mins = Math.floor( ( timeLeft % 360000 ) / 60000 );
+  let secs = Math.floor( ( timeLeft % 60000 ) / 1000 );
+  let mils = Math.floor( ( timeLeft % 60000 ) / 10 );
+
   const pad = ( num ) => ( '00' + num ).slice( -2 )
-  let mins = Math.floor( ( timeLeft % ( 1000 * 60 * 60 ) ) / ( 1000 * 60 ) );
-  let secs = Math.floor( ( timeLeft % ( 1000 * 60 ) ) / 1000 );
-  let mils = Math.floor( ( timeLeft % ( 1000 * 60 ) ) / 10 );
+  const displayTime = `${ pad( mins ) }:${ pad( secs ) }${ showMs ? `:${ pad( mils ) }` : '' }`
 
   return (
     <Circle
-      size={size}
-      fontSize={fontSize}
-      minutes={minutes}
-      fill={fillColor}
-      bgColor={bgColor}
+      size={props.size}
+      fontSize={props.fontSize}
+      minutes={props.minutes}
+      fill={props.fillColor}
+      bgColor={props.bgColor}
       playState={running ? 'running' : 'paused'}
       reset={reset}
     >
-      {timeLeft > 0 && `${ pad( mins ) }:${ pad( secs ) }${ showMs ? `:${ pad( mils ) }` : '' }`}
-      {timeLeft <= 0 && completeMsg}
+      {timeLeft > 0 ? displayTime : props.completeMsg}
     </Circle>
   )
 };
@@ -42,7 +44,7 @@ Timer.propTypes = {
   completeMsg: PropTypes.string,
   running: PropTypes.bool,
   setRunning: PropTypes.func,
-  timeAtLoad: PropTypes.object,
+  timeAtLoad: PropTypes.number,
   reset: PropTypes.bool,
   setReset: PropTypes.func
 };

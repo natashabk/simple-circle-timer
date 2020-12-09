@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 let timeAtPause = 0;
 
-export const useTimer = ( minutes, running, timeAtLoad ) => {
+export const useTimer = ( minutes, running, setRunning, timeAtLoad, reset, setReset ) => {
   const [ ms, setMs ] = useState( minutes * 1000 * 60 )
   const [ startTime, setStartTime ] = useState( timeAtLoad )
   const [ count, setCount ] = useState( 0 )
@@ -11,8 +11,8 @@ export const useTimer = ( minutes, running, timeAtLoad ) => {
 
   useEffect( () => {
     if ( reset ) {
-      setCount( 0 )
       setRunning( 0 )
+      setCount( 0 )
     }
   }, [ reset, setRunning ] )
 
@@ -30,16 +30,17 @@ export const useTimer = ( minutes, running, timeAtLoad ) => {
         if ( setRunning ) setRunning( false )
       }
     }
-    const resetTimer = ( nextAction ) => {
+    const resetTimer = () => {
       timeAtPause = minutes * 1000 * 60
       setMs( timeAtPause )
       setStartTime( Date.now() )
-      if ( nextAction === 'run' && setRunning ) setRunning( true )
       if ( setReset ) setReset( false )
     }
-    if ( count > 0 ) { running ? startTimer() : pauseTimer() }
-    else if ( reset ) resetTimer( 'pause' )
-    else if ( count === 0 && running ) resetTimer( 'run' )
+
+    if ( count > 0 && !reset ) { running ? startTimer() : pauseTimer() }
+    else if ( reset ) resetTimer()
+    else if ( count === 0 && running ) resetTimer()
+
   }, [ running, minutes, reset ] )
 
   useEffect( () => {
@@ -51,7 +52,7 @@ export const useTimer = ( minutes, running, timeAtLoad ) => {
 
   return {
     timeLeft,
-    completed,
+    completed
   }
 
 }

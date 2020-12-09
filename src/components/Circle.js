@@ -1,8 +1,7 @@
 import React from 'react'
 import PropTypes from 'prop-types';
-import './circle.css';
 
-const Circle = ( { children, size, fontSize, bgColor, minutes, fill, playState, reset } ) => {
+const Circle = ( { children, fontSize, size, bgColor, minutes, fill, playState, reset } ) => {
   const bg = `${ fill }29`
   const sec = minutes * 60
   const animations = {
