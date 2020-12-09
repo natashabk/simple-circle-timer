@@ -1,7 +1,8 @@
 const path = require( 'path' );
 
 module.exports = {
-  entry: './src/app.js',
+  entry: './src/index.js',
+  mode: 'production',
   output: {
     path: path.join( __dirname, 'public' ),
     filename: 'bundle.js',
@@ -20,13 +21,7 @@ module.exports = {
       }
     ]
   },
-  resolve: {
-    extensions: [ '.js', '.jsx' ],
-    alias: {
-      react: require.resolve( 'react' ),
-    },
-  },
   externals: {
-    react: 'react'
+    react: 'commonjs react'
   }
 };

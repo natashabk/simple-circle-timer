@@ -8,7 +8,7 @@
     "url": "https://github.com/natashabuck/simple-circle-timer"
   },
   "private": false,
-  "main": "./public/bundle.js",
+  "main": "public",
   "files": [
     "public",
     "README.md"
@@ -24,14 +24,14 @@
     "@babel/preset-react": "^7.12.7",
     "babel-loader": "^8.2.2",
     "css-loader": "^5.0.1",
+    "prop-types": "^15.7.2",
+    "react": "^17.0.1",
+    "react-dom": "^17.0.1",
     "style-loader": "^2.0.0",
     "webpack": "^5.10.0",
     "webpack-cli": "^4.2.0"
   },
   "peerDependencies": {
-    "prop-types": "^15.7.2",
-    "react": "^17.0.1",
-    "react-dom": "^17.0.1"
-  },
-  "dependencies": {}
+    "react": "^17.0.1"
+  }
 }
