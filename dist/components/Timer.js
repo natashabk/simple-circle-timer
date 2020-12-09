@@ -13,8 +13,6 @@ var _Circle = _interopRequireDefault(require("./Circle"));
 
 var _useTimer2 = require("../hooks/useTimer");
 
-require("./circle.css");
-
 function _interopRequireDefault(obj) { return obj && obj.__esModule ? obj : { "default": obj }; }
 
 var Timer = function Timer(props) {
@@ -62,7 +60,7 @@ Timer.propTypes = {
   showMs: _propTypes["default"].bool,
   onComplete: _propTypes["default"].func,
   completeMsg: _propTypes["default"].string,
-  running: _propTypes["default"].bool,
+  running: _propTypes["default"].oneOfType([_propTypes["default"].bool, _propTypes["default"].number]),
   setRunning: _propTypes["default"].func,
   timeAtLoad: _propTypes["default"].number,
   reset: _propTypes["default"].bool,

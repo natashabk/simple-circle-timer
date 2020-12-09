@@ -22,7 +22,7 @@ function _arrayWithHoles(arr) { if (Array.isArray(arr)) return arr; }
 var timeAtPause = 0;
 
 var useTimer = function useTimer(minutes, running, setRunning, timeAtLoad, reset, setReset) {
-  var _useState = (0, _react.useState)(minutes * 1000 * 60),
+  var _useState = (0, _react.useState)(minutes * 60000),
       _useState2 = _slicedToArray(_useState, 2),
       ms = _useState2[0],
       setMs = _useState2[1];
@@ -42,7 +42,10 @@ var useTimer = function useTimer(minutes, running, setRunning, timeAtLoad, reset
       completed = _useState8[0],
       setCompleted = _useState8[1];
 
-  var timeLeft = ms + startTime - Date.now();
+  var timeLeft = function timeLeft() {
+    if (count === 0) return ms;else return ms + startTime - Date.now();
+  };
+
   (0, _react.useEffect)(function () {
     if (reset) {
       setRunning(0);
@@ -51,7 +54,7 @@ var useTimer = function useTimer(minutes, running, setRunning, timeAtLoad, reset
   }, [reset, setRunning]);
   (0, _react.useEffect)(function () {
     var startTimer = function startTimer() {
-      if (timeLeft > 0) {
+      if (timeLeft() > 0) {
         setMs(timeAtPause);
         setStartTime(Date.now());
         if (setRunning) setRunning(true);
@@ -59,14 +62,14 @@ var useTimer = function useTimer(minutes, running, setRunning, timeAtLoad, reset
     };
 
     var pauseTimer = function pauseTimer() {
-      if (timeLeft > 0) {
-        timeAtPause = timeLeft;
+      if (timeLeft() > 0) {
+        timeAtPause = timeLeft();
         if (setRunning) setRunning(false);
       }
     };
 
     var resetTimer = function resetTimer() {
-      timeAtPause = minutes * 1000 * 60;
+      timeAtPause = minutes * 60000;
       setMs(timeAtPause);
       setStartTime(Date.now());
       if (setReset) setReset(false);
@@ -77,17 +80,17 @@ var useTimer = function useTimer(minutes, running, setRunning, timeAtLoad, reset
     } else if (reset) resetTimer();else if (count === 0 && running) resetTimer();
   }, [running, minutes, reset]);
   (0, _react.useEffect)(function () {
-    if (timeLeft > 0 && running) {
+    if (timeLeft() > 0 && running) {
       var tick = setInterval(function () {
         return setCount(count + 1);
       }, 100);
       return function () {
         return clearInterval(tick);
       };
-    } else if (timeLeft <= 0 && running) setCompleted(true);
-  }, [timeLeft, running, count]);
+    } else if (timeLeft() <= 0 && running && !completed) setCompleted(true);
+  }, [timeLeft(), running, count]);
   return {
-    timeLeft: timeLeft,
+    timeLeft: timeLeft(),
     completed: completed
   };
 };
