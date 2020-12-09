@@ -17,7 +17,8 @@
     "start": "webpack --mode=development",
     "build": "webpack --mode=production",
     "transpile": "babel src -d dist --copy-files",
-    "prepublishOnly": "npm run transpile"
+    "prepublishOnly": "npm run transpile",
+    "test": "jest"
   },
   "keywords": [],
   "devDependencies": {
@@ -25,9 +26,16 @@
     "@babel/core": "^7.12.9",
     "@babel/preset-env": "^7.12.7",
     "@babel/preset-react": "^7.12.7",
+    "@testing-library/jest-dom": "^5.11.6",
+    "@testing-library/react": "^11.2.2",
     "babel-loader": "^8.2.2",
     "css-loader": "^5.0.1",
+    "jest": "^26.6.3",
+    "jest-cli": "^26.6.3",
     "prop-types": "^15.7.2",
+    "react": "^17.0.1",
+    "react-dom": "^17.0.1",
+    "regenerator-runtime": "^0.13.7",
     "style-loader": "^2.0.0",
     "webpack": "^5.10.0",
     "webpack-cli": "^4.2.0"
@@ -35,5 +43,11 @@
   "peerDependencies": {
     "react": "^17.0.1",
     "react-dom": "^17.0.1"
+  },
+  "dependencies": {},
+  "jest": {
+    "moduleNameMapper": {
+      "^.+\\.(css|less)$": "<rootDir>/tests/CSSStub.js"
+    }
   }
 }

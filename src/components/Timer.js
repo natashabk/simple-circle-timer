@@ -2,7 +2,6 @@ import React from 'react'
 import PropTypes from 'prop-types';
 import Circle from './Circle';
 import { useTimer } from '../hooks/useTimer'
-import './circle.css';
 
 const Timer = ( props ) => {
   const { minutes, running, setRunning, timeAtLoad, reset, setReset, showMs } = props
@@ -42,7 +41,7 @@ Timer.propTypes = {
   showMs: PropTypes.bool,
   onComplete: PropTypes.func,
   completeMsg: PropTypes.string,
-  running: PropTypes.bool,
+  running: PropTypes.oneOfType( [ PropTypes.bool, PropTypes.number ] ),
   setRunning: PropTypes.func,
   timeAtLoad: PropTypes.number,
   reset: PropTypes.bool,
