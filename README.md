@@ -1,7 +1,7 @@
 # Simple React Circle Timer
   Lightweight, easily implemented countdown timer with circular progress bar around the outside. 
 
-![demo](https://github.com/natashabuck/circletimer/blob/main/src/Demo/example.png "Demo")
+![demo](https://res.cloudinary.com/das8diykm/image/upload/v1608377748/demo-imgs/sct.png "Demo")
 
 
   #### Accurate timekeeping:
