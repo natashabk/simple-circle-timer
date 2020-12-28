@@ -13,6 +13,19 @@
     "dist",
     "README.md"
   ],
+  "keywords": [
+    "react",
+    "simple",
+    "circle",
+    "timer",
+    "countdown",
+    "progress",
+    "clock",
+    "play",
+    "pause",
+    "reset",
+    "controls"
+  ],
   "scripts": {
     "start": "webpack --mode=development",
     "build": "webpack --mode=production",
@@ -20,7 +33,6 @@
     "prepublishOnly": "npm run transpile",
     "test": "jest"
   },
-  "keywords": [],
   "devDependencies": {
     "@babel/cli": "^7.12.8",
     "@babel/core": "^7.12.9",

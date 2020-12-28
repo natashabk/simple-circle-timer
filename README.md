@@ -1,5 +1,5 @@
 # Simple React Circle Timer
-  Lightweight, easily implemented countdown timer with circular progress bar around the outside. 
+  Lightweight, easily implemented countdown timer with circular progress bar. Optional Play, Pause, and Reset buttons. 
 
 ![demo](https://res.cloudinary.com/das8diykm/image/upload/v1608377748/demo-imgs/sct.png "Demo")
 
