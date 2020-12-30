@@ -1,7 +1,7 @@
 import { useState, useEffect } from 'react'
 let timeAtPause = 0;
 
-export const useTimer = ( minutes, running, setRunning, timeAtLoad, reset, setReset ) => {
+export const useTimer = ( minutes, running, setRunning, timeAtLoad, reset, setReset, onComplete ) => {
   const [ ms, setMs ] = useState( minutes * 60000 )
   const [ startTime, setStartTime ] = useState( timeAtLoad )
   const [ count, setCount ] = useState( 0 )
@@ -53,9 +53,12 @@ export const useTimer = ( minutes, running, setRunning, timeAtLoad, reset, setRe
     } else if ( timeLeft() <= 0 && running && !completed ) setCompleted( true )
   }, [ timeLeft(), running, count ] );
 
+  useEffect( () => {
+    if ( completed ) onComplete();
+  }, [ completed ] )
+
   return {
     timeLeft: timeLeft(),
-    completed
   }
 
 }

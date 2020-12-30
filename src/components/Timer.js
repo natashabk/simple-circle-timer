@@ -4,10 +4,8 @@ import Circle from './Circle';
 import { useTimer } from '../hooks/useTimer'
 
 const Timer = ( props ) => {
-  const { minutes, running, setRunning, timeAtLoad, reset, setReset, showMs } = props
-  const { timeLeft, completed } = useTimer( minutes, running, setRunning, timeAtLoad, reset, setReset )
-
-  if ( completed ) props.onComplete();
+  const { minutes, running, setRunning, timeAtLoad, reset, setReset, showMs, onComplete } = props
+  const { timeLeft } = useTimer( minutes, running, setRunning, timeAtLoad, reset, setReset, onComplete )
 
   let mins = Math.floor( ( timeLeft % 360000 ) / 60000 );
   let secs = Math.floor( ( timeLeft % 60000 ) / 1000 );

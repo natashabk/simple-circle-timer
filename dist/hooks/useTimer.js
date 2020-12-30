@@ -21,7 +21,7 @@ function _arrayWithHoles(arr) { if (Array.isArray(arr)) return arr; }
 
 var timeAtPause = 0;
 
-var useTimer = function useTimer(minutes, running, setRunning, timeAtLoad, reset, setReset) {
+var useTimer = function useTimer(minutes, running, setRunning, timeAtLoad, reset, setReset, onComplete) {
   var _useState = (0, _react.useState)(minutes * 60000),
       _useState2 = _slicedToArray(_useState, 2),
       ms = _useState2[0],
@@ -89,9 +89,11 @@ var useTimer = function useTimer(minutes, running, setRunning, timeAtLoad, reset
       };
     } else if (timeLeft() <= 0 && running && !completed) setCompleted(true);
   }, [timeLeft(), running, count]);
+  (0, _react.useEffect)(function () {
+    if (completed) onComplete();
+  }, [completed]);
   return {
-    timeLeft: timeLeft(),
-    completed: completed
+    timeLeft: timeLeft()
   };
 };
 

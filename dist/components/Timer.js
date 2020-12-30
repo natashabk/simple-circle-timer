@@ -22,13 +22,12 @@ var Timer = function Timer(props) {
       timeAtLoad = props.timeAtLoad,
       reset = props.reset,
       setReset = props.setReset,
-      showMs = props.showMs;
+      showMs = props.showMs,
+      onComplete = props.onComplete;
 
-  var _useTimer = (0, _useTimer2.useTimer)(minutes, running, setRunning, timeAtLoad, reset, setReset),
-      timeLeft = _useTimer.timeLeft,
-      completed = _useTimer.completed;
+  var _useTimer = (0, _useTimer2.useTimer)(minutes, running, setRunning, timeAtLoad, reset, setReset, onComplete),
+      timeLeft = _useTimer.timeLeft;
 
-  if (completed) props.onComplete();
   var mins = Math.floor(timeLeft % 360000 / 60000);
   var secs = Math.floor(timeLeft % 60000 / 1000);
   var mils = Math.floor(timeLeft % 60000 / 10);
