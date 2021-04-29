@@ -6,6 +6,9 @@
 "use strict";
 
 const util = require("util");
+const Entrypoint = require("./Entrypoint");
+const ModuleGraphConnection = require("./ModuleGraphConnection");
+const { first } = require("./util/SetHelpers");
 const SortableSet = require("./util/SortableSet");
 const {
 	compareModulesById,
@@ -15,18 +18,19 @@ const {
 	compareSelect,
 	compareIds
 } = require("./util/comparators");
+const createHash = require("./util/createHash");
 const findGraphRoots = require("./util/findGraphRoots");
 const {
 	RuntimeSpecMap,
 	RuntimeSpecSet,
 	runtimeToString,
-	mergeRuntime
+	mergeRuntime,
+	forEachRuntime
 } = require("./util/runtime");
 
 /** @typedef {import("./AsyncDependenciesBlock")} AsyncDependenciesBlock */
 /** @typedef {import("./Chunk")} Chunk */
 /** @typedef {import("./ChunkGroup")} ChunkGroup */
-/** @typedef {import("./Entrypoint")} Entrypoint */
 /** @typedef {import("./Module")} Module */
 /** @typedef {import("./ModuleGraph")} ModuleGraph */
 /** @typedef {import("./RuntimeModule")} RuntimeModule */
@@ -34,6 +38,8 @@ const {
 
 /** @type {ReadonlySet<string>} */
 const EMPTY_SET = new Set();
+
+const ZERO_BIG_INT = BigInt(0);
 
 const compareModuleIterables = compareIterables(compareModulesByIdentifier);
 
@@ -46,11 +52,12 @@ const compareModuleIterables = compareIterables(compareModulesByIdentifier);
  * @property {number=} entryChunkMultiplicator multiplicator for initial chunks
  */
 
-/**
- * @typedef {Object} ModuleHashInfo
- * @property {string} hash
- * @property {string} renderedHash
- */
+class ModuleHashInfo {
+	constructor(hash, renderedHash) {
+		this.hash = hash;
+		this.renderedHash = renderedHash;
+	}
+}
 
 /** @template T @typedef {(set: SortableSet<T>) => T[]} SetToArrayFunction<T> */
 
@@ -61,6 +68,18 @@ const compareModuleIterables = compareIterables(compareModulesByIdentifier);
  */
 const getArray = set => {
 	return Array.from(set);
+};
+
+/**
+ * @param {SortableSet<Chunk>} chunks the chunks
+ * @returns {RuntimeSpecSet} runtimes
+ */
+const getModuleRuntimes = chunks => {
+	const runtimes = new RuntimeSpecSet();
+	for (const chunk of chunks) {
+		runtimes.add(chunk.runtime);
+	}
+	return runtimes;
 };
 
 /**
@@ -169,6 +188,10 @@ class ChunkGraphModule {
 		this.id = null;
 		/** @type {RuntimeSpecMap<Set<string>> | undefined} */
 		this.runtimeRequirements = undefined;
+		/** @type {RuntimeSpecMap<string>} */
+		this.graphHashes = undefined;
+		/** @type {RuntimeSpecMap<string>} */
+		this.graphHashesWithConnections = undefined;
 	}
 }
 
@@ -272,10 +295,19 @@ class ChunkGraph {
 			findGraphRoots(set, module => {
 				/** @type {Set<Module>} */
 				const set = new Set();
-				for (const connection of moduleGraph.getOutgoingConnections(module)) {
-					if (!connection.module) continue;
-					set.add(connection.module);
-				}
+				const addDependencies = module => {
+					for (const connection of moduleGraph.getOutgoingConnections(module)) {
+						if (!connection.module) continue;
+						const activeState = connection.getActiveState(undefined);
+						if (activeState === false) continue;
+						if (activeState === ModuleGraphConnection.TRANSITIVE_ONLY) {
+							addDependencies(connection.module);
+							continue;
+						}
+						set.add(connection.module);
+					}
+				};
+				addDependencies(module);
 				return set;
 			})
 		).sort(compareModulesByIdentifier);
@@ -317,6 +349,7 @@ class ChunkGraph {
 		}
 		cgc.modules.clear();
 		chunk.disconnectFromGroups();
+		ChunkGraph.clearChunkGraphForChunk(chunk);
 	}
 
 	/**
@@ -491,11 +524,7 @@ class ChunkGraph {
 	 */
 	getModuleRuntimes(module) {
 		const cgm = this._getChunkGraphModule(module);
-		const runtimes = new RuntimeSpecSet();
-		for (const chunk of cgm.chunks) {
-			runtimes.add(chunk.runtime);
-		}
-		return runtimes;
+		return cgm.chunks.getFromUnorderedCache(getModuleRuntimes);
 	}
 
 	/**
@@ -656,11 +685,8 @@ class ChunkGraph {
 	 */
 	getChunkConditionMap(chunk, filterFn) {
 		const map = Object.create(null);
-		for (const asyncChunk of chunk.getAllAsyncChunks()) {
-			map[asyncChunk.id] = filterFn(asyncChunk, this);
-		}
-		for (const depChunk of this.getChunkEntryDependentChunksIterable(chunk)) {
-			map[depChunk.id] = filterFn(depChunk, this);
+		for (const c of chunk.getAllReferencedChunks()) {
+			map[c.id] = filterFn(c, this);
 		}
 		return map;
 	}
@@ -871,6 +897,7 @@ class ChunkGraph {
 			chunkA.addGroup(chunkGroup);
 			chunkB.removeGroup(chunkGroup);
 		}
+		ChunkGraph.clearChunkGraphForChunk(chunkB);
 	}
 
 	/**
@@ -1016,16 +1043,22 @@ class ChunkGraph {
 	 * @returns {Iterable<Chunk>} iterable of chunks
 	 */
 	getChunkEntryDependentChunksIterable(chunk) {
-		const cgc = this._getChunkGraphChunk(chunk);
 		/** @type {Set<Chunk>} */
 		const set = new Set();
-		for (const chunkGroup of cgc.entryModules.values()) {
-			for (const c of chunkGroup.chunks) {
-				if (c !== chunk) {
-					set.add(c);
+		for (const chunkGroup of chunk.groupsIterable) {
+			if (chunkGroup instanceof Entrypoint) {
+				const entrypointChunk = chunkGroup.getEntrypointChunk();
+				const cgc = this._getChunkGraphChunk(entrypointChunk);
+				for (const chunkGroup of cgc.entryModules.values()) {
+					for (const c of chunkGroup.chunks) {
+						if (c !== chunk && c !== entrypointChunk && !c.hasRuntime()) {
+							set.add(c);
+						}
+					}
 				}
 			}
 		}
+
 		return set;
 	}
 
@@ -1082,6 +1115,15 @@ class ChunkGraph {
 	 * @returns {Iterable<RuntimeModule> | undefined} iterable of modules (do not modify)
 	 */
 	getChunkFullHashModulesIterable(chunk) {
+		const cgc = this._getChunkGraphChunk(chunk);
+		return cgc.fullHashModules;
+	}
+
+	/**
+	 * @param {Chunk} chunk the chunk
+	 * @returns {ReadonlySet<RuntimeModule> | undefined} set of modules (do not modify)
+	 */
+	getChunkFullHashModulesSet(chunk) {
 		const cgc = this._getChunkGraphChunk(chunk);
 		return cgc.fullHashModules;
 	}
@@ -1164,14 +1206,20 @@ class ChunkGraph {
 	}
 
 	/**
+	 * @template T
 	 * @param {Module} module the module
+	 * @param {RuntimeSpecMap<T>} hashes hashes data
 	 * @param {RuntimeSpec} runtime the runtime
-	 * @returns {ModuleHashInfo} hash
+	 * @returns {T} hash
 	 */
-	_getModuleHashInfo(module, runtime) {
-		const cgm = this._getChunkGraphModule(module);
-		const hashes = cgm.hashes;
-		if (hashes && runtime === undefined) {
+	_getModuleHashInfo(module, hashes, runtime) {
+		if (!hashes) {
+			throw new Error(
+				`Module ${module.identifier()} has no hash info for runtime ${runtimeToString(
+					runtime
+				)} (hashes not set at all)`
+			);
+		} else if (runtime === undefined) {
 			const hashInfoItems = new Set(hashes.values());
 			if (hashInfoItems.size !== 1) {
 				throw new Error(
@@ -1182,16 +1230,17 @@ class ChunkGraph {
 Caller might not support runtime-dependent code generation (opt-out via optimization.usedExports: "global").`
 				);
 			}
-			return hashInfoItems.values().next().value;
+			return first(hashInfoItems);
 		} else {
-			const hashInfo = hashes && hashes.get(runtime);
+			const hashInfo = hashes.get(runtime);
 			if (!hashInfo) {
 				throw new Error(
 					`Module ${module.identifier()} has no hash info for runtime ${runtimeToString(
 						runtime
-					)} (available runtimes ${
-						hashes && Array.from(hashes.keys(), runtimeToString).join(", ")
-					})`
+					)} (available runtimes ${Array.from(
+						hashes.keys(),
+						runtimeToString
+					).join(", ")})`
 				);
 			}
 			return hashInfo;
@@ -1215,7 +1264,9 @@ Caller might not support runtime-dependent code generation (opt-out via optimiza
 	 * @returns {string} hash
 	 */
 	getModuleHash(module, runtime) {
-		return this._getModuleHashInfo(module, runtime).hash;
+		const cgm = this._getChunkGraphModule(module);
+		const hashes = cgm.hashes;
+		return this._getModuleHashInfo(module, hashes, runtime).hash;
 	}
 
 	/**
@@ -1224,7 +1275,9 @@ Caller might not support runtime-dependent code generation (opt-out via optimiza
 	 * @returns {string} hash
 	 */
 	getRenderedModuleHash(module, runtime) {
-		return this._getModuleHashInfo(module, runtime).renderedHash;
+		const cgm = this._getChunkGraphModule(module);
+		const hashes = cgm.hashes;
+		return this._getModuleHashInfo(module, hashes, runtime).renderedHash;
 	}
 
 	/**
@@ -1239,7 +1292,7 @@ Caller might not support runtime-dependent code generation (opt-out via optimiza
 		if (cgm.hashes === undefined) {
 			cgm.hashes = new RuntimeSpecMap();
 		}
-		cgm.hashes.set(runtime, { hash, renderedHash });
+		cgm.hashes.set(runtime, new ModuleHashInfo(hash, renderedHash));
 	}
 
 	/**
@@ -1322,6 +1375,173 @@ Caller might not support runtime-dependent code generation (opt-out via optimiza
 	}
 
 	/**
+	 * @param {Module} module the module
+	 * @param {RuntimeSpec} runtime the runtime
+	 * @param {boolean} withConnections include connections
+	 * @returns {string} hash
+	 */
+	getModuleGraphHash(module, runtime, withConnections = true) {
+		const cgm = this._getChunkGraphModule(module);
+		return withConnections
+			? this._getModuleGraphHashWithConnections(cgm, module, runtime)
+			: this._getModuleGraphHashBigInt(cgm, module, runtime).toString(16);
+	}
+
+	/**
+	 * @param {Module} module the module
+	 * @param {RuntimeSpec} runtime the runtime
+	 * @param {boolean} withConnections include connections
+	 * @returns {bigint} hash
+	 */
+	getModuleGraphHashBigInt(module, runtime, withConnections = true) {
+		const cgm = this._getChunkGraphModule(module);
+		return withConnections
+			? BigInt(
+					`0x${this._getModuleGraphHashWithConnections(cgm, module, runtime)}`
+			  )
+			: this._getModuleGraphHashBigInt(cgm, module, runtime);
+	}
+
+	/**
+	 * @param {ChunkGraphModule} cgm the ChunkGraphModule
+	 * @param {Module} module the module
+	 * @param {RuntimeSpec} runtime the runtime
+	 * @returns {bigint} hash as big int
+	 */
+	_getModuleGraphHashBigInt(cgm, module, runtime) {
+		if (cgm.graphHashes === undefined) {
+			cgm.graphHashes = new RuntimeSpecMap();
+		}
+		const graphHash = cgm.graphHashes.provide(runtime, () => {
+			const hash = createHash("md4");
+			hash.update(`${cgm.id}`);
+			hash.update(`${this.moduleGraph.isAsync(module)}`);
+			this.moduleGraph.getExportsInfo(module).updateHash(hash, runtime);
+			return BigInt(`0x${/** @type {string} */ (hash.digest("hex"))}`);
+		});
+		return graphHash;
+	}
+
+	/**
+	 * @param {ChunkGraphModule} cgm the ChunkGraphModule
+	 * @param {Module} module the module
+	 * @param {RuntimeSpec} runtime the runtime
+	 * @returns {string} hash
+	 */
+	_getModuleGraphHashWithConnections(cgm, module, runtime) {
+		if (cgm.graphHashesWithConnections === undefined) {
+			cgm.graphHashesWithConnections = new RuntimeSpecMap();
+		}
+		const activeStateToString = state => {
+			if (state === false) return "F";
+			if (state === true) return "T";
+			if (state === ModuleGraphConnection.TRANSITIVE_ONLY) return "O";
+			throw new Error("Not implemented active state");
+		};
+		const strict = module.buildMeta && module.buildMeta.strictHarmonyModule;
+		return cgm.graphHashesWithConnections.provide(runtime, () => {
+			const graphHash = this._getModuleGraphHashBigInt(
+				cgm,
+				module,
+				runtime
+			).toString(16);
+			const connections = this.moduleGraph.getOutgoingConnections(module);
+			/** @type {Set<Module>} */
+			const activeNamespaceModules = new Set();
+			/** @type {Map<string, Module | Set<Module>>} */
+			const connectedModules = new Map();
+			const processConnection = (connection, stateInfo) => {
+				const module = connection.module;
+				stateInfo += module.getExportsType(this.moduleGraph, strict);
+				// cspell:word Tnamespace
+				if (stateInfo === "Tnamespace") activeNamespaceModules.add(module);
+				else {
+					const oldModule = connectedModules.get(stateInfo);
+					if (oldModule === undefined) {
+						connectedModules.set(stateInfo, module);
+					} else if (oldModule instanceof Set) {
+						oldModule.add(module);
+					} else if (oldModule !== module) {
+						connectedModules.set(stateInfo, new Set([oldModule, module]));
+					}
+				}
+			};
+			if (runtime === undefined || typeof runtime === "string") {
+				for (const connection of connections) {
+					const state = connection.getActiveState(runtime);
+					if (state === false) continue;
+					processConnection(connection, state === true ? "T" : "O");
+				}
+			} else {
+				// cspell:word Tnamespace
+				for (const connection of connections) {
+					const states = new Set();
+					let stateInfo = "";
+					forEachRuntime(
+						runtime,
+						runtime => {
+							const state = connection.getActiveState(runtime);
+							states.add(state);
+							stateInfo += activeStateToString(state) + runtime;
+						},
+						true
+					);
+					if (states.size === 1) {
+						const state = first(states);
+						if (state === false) continue;
+						stateInfo = activeStateToString(state);
+					}
+					processConnection(connection, stateInfo);
+				}
+			}
+			// cspell:word Tnamespace
+			if (activeNamespaceModules.size === 0 && connectedModules.size === 0)
+				return graphHash;
+			const connectedModulesInOrder =
+				connectedModules.size > 1
+					? Array.from(connectedModules).sort(([a], [b]) => (a < b ? -1 : 1))
+					: connectedModules;
+			const hash = createHash("md4");
+			const addModuleToHash = module => {
+				hash.update(
+					this._getModuleGraphHashBigInt(
+						this._getChunkGraphModule(module),
+						module,
+						runtime
+					).toString(16)
+				);
+			};
+			const addModulesToHash = modules => {
+				let xor = ZERO_BIG_INT;
+				for (const m of modules) {
+					xor =
+						xor ^
+						this._getModuleGraphHashBigInt(
+							this._getChunkGraphModule(m),
+							m,
+							runtime
+						);
+				}
+				hash.update(xor.toString(16));
+			};
+			if (activeNamespaceModules.size === 1)
+				addModuleToHash(activeNamespaceModules.values().next().value);
+			else if (activeNamespaceModules.size > 1)
+				addModulesToHash(activeNamespaceModules);
+			for (const [stateInfo, modules] of connectedModulesInOrder) {
+				hash.update(stateInfo);
+				if (modules instanceof Set) {
+					addModulesToHash(modules);
+				} else {
+					addModuleToHash(modules);
+				}
+			}
+			hash.update(graphHash);
+			return /** @type {string} */ (hash.digest("hex"));
+		});
+	}
+
+	/**
 	 * @param {Chunk} chunk the chunk
 	 * @returns {ReadonlySet<string>} runtime requirements
 	 */
@@ -1373,6 +1593,15 @@ Caller might not support runtime-dependent code generation (opt-out via optimiza
 
 	// TODO remove in webpack 6
 	/**
+	 * @param {Module} module the module
+	 * @returns {void}
+	 */
+	static clearChunkGraphForModule(module) {
+		chunkGraphForModuleMap.delete(module);
+	}
+
+	// TODO remove in webpack 6
+	/**
 	 * @param {Chunk} chunk the chunk
 	 * @param {string} deprecateMessage message for the deprecation message
 	 * @param {string} deprecationCode code for the deprecation
@@ -1410,6 +1639,15 @@ Caller might not support runtime-dependent code generation (opt-out via optimiza
 	 */
 	static setChunkGraphForChunk(chunk, chunkGraph) {
 		chunkGraphForChunkMap.set(chunk, chunkGraph);
+	}
+
+	// TODO remove in webpack 6
+	/**
+	 * @param {Chunk} chunk the chunk
+	 * @returns {void}
+	 */
+	static clearChunkGraphForChunk(chunk) {
+		chunkGraphForChunkMap.delete(chunk);
 	}
 }
 

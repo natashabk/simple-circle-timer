@@ -41,6 +41,8 @@ class RuntimeModule extends Module {
 		this.compilation = undefined;
 		/** @type {Chunk} */
 		this.chunk = undefined;
+		/** @type {ChunkGraph} */
+		this.chunkGraph = undefined;
 		this.fullHash = false;
 		/** @type {string} */
 		this._cachedGeneratedCode = undefined;
@@ -49,11 +51,13 @@ class RuntimeModule extends Module {
 	/**
 	 * @param {Compilation} compilation the compilation
 	 * @param {Chunk} chunk the chunk
+	 * @param {ChunkGraph} chunkGraph the chunk graph
 	 * @returns {void}
 	 */
-	attach(compilation, chunk) {
+	attach(compilation, chunk, chunkGraph = compilation.chunkGraph) {
 		this.compilation = compilation;
 		this.chunk = chunk;
+		this.chunkGraph = chunkGraph;
 	}
 
 	/**
@@ -184,5 +188,25 @@ class RuntimeModule extends Module {
 		return true;
 	}
 }
+
+/**
+ * Runtime modules without any dependencies to other runtime modules
+ */
+RuntimeModule.STAGE_NORMAL = 0;
+
+/**
+ * Runtime modules with simple dependencies on other runtime modules
+ */
+RuntimeModule.STAGE_BASIC = 5;
+
+/**
+ * Runtime modules which attach to handlers of other runtime modules
+ */
+RuntimeModule.STAGE_ATTACH = 10;
+
+/**
+ * Runtime modules which trigger actions on bootstrap
+ */
+RuntimeModule.STAGE_TRIGGER = 20;
 
 module.exports = RuntimeModule;

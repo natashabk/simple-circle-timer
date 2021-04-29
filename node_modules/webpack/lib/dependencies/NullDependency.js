@@ -19,22 +19,6 @@ class NullDependency extends Dependency {
 	get type() {
 		return "null";
 	}
-
-	/**
-	 * Update the hash
-	 * @param {Hash} hash hash to be updated
-	 * @param {UpdateHashContext} context context
-	 * @returns {void}
-	 */
-	updateHash(hash, context) {}
-
-	serialize({ write }) {
-		write(this.loc);
-	}
-
-	deserialize({ read }) {
-		this.loc = read();
-	}
 }
 
 NullDependency.Template = class NullDependencyTemplate extends (

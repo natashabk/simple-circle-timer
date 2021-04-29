@@ -22,12 +22,12 @@ class ShareRuntimeModule extends RuntimeModule {
 	 * @returns {string} runtime code
 	 */
 	generate() {
+		const { compilation, chunkGraph } = this;
 		const {
 			runtimeTemplate,
-			chunkGraph,
 			codeGenerationResults,
 			outputOptions: { uniqueName }
-		} = this.compilation;
+		} = compilation;
 		/** @type {Map<string, Map<number, Set<string>>>} */
 		const initCodePerScope = new Map();
 		for (const chunk of this.chunk.getAllReferencedChunks()) {
@@ -78,20 +78,20 @@ class ShareRuntimeModule extends RuntimeModule {
 					"// runs all init snippets from all modules reachable",
 					`var scope = ${RuntimeGlobals.shareScopeMap}[name];`,
 					`var warn = ${runtimeTemplate.returningFunction(
-						'typeof console !== "undefined" && console.warn && console.warn(msg);',
+						'typeof console !== "undefined" && console.warn && console.warn(msg)',
 						"msg"
 					)};`,
 					`var uniqueName = ${JSON.stringify(uniqueName || undefined)};`,
 					`var register = ${runtimeTemplate.basicFunction(
-						"name, version, factory",
+						"name, version, factory, eager",
 						[
 							"var versions = scope[name] = scope[name] || {};",
 							"var activeVersion = versions[version];",
-							"if(!activeVersion || !activeVersion.loaded && uniqueName > activeVersion.from) versions[version] = { get: factory, from: uniqueName };"
+							"if(!activeVersion || (!activeVersion.loaded && (!eager != !activeVersion.eager ? eager : uniqueName > activeVersion.from))) versions[version] = { get: factory, from: uniqueName, eager: !!eager };"
 						]
 					)};`,
 					`var initExternal = ${runtimeTemplate.basicFunction("id", [
-						`var handleError = ${runtimeTemplate.returningFunction(
+						`var handleError = ${runtimeTemplate.expressionFunction(
 							'warn("Initialization of sharing external failed: " + err)',
 							"err"
 						)};`,

@@ -8,6 +8,8 @@
 const util = require("util");
 const ExportsInfo = require("./ExportsInfo");
 const ModuleGraphConnection = require("./ModuleGraphConnection");
+const SortableSet = require("./util/SortableSet");
+const WeakTupleMap = require("./util/WeakTupleMap");
 
 /** @typedef {import("./DependenciesBlock")} DependenciesBlock */
 /** @typedef {import("./Dependency")} Dependency */
@@ -15,7 +17,6 @@ const ModuleGraphConnection = require("./ModuleGraphConnection");
 /** @typedef {import("./Module")} Module */
 /** @typedef {import("./ModuleProfile")} ModuleProfile */
 /** @typedef {import("./RequestShortener")} RequestShortener */
-/** @template T @typedef {import("./util/SortableSet")<T>} SortableSet<t> */
 /** @typedef {import("./util/runtime").RuntimeSpec} RuntimeSpec */
 
 /**
@@ -24,12 +25,42 @@ const ModuleGraphConnection = require("./ModuleGraphConnection");
  * @returns {string}
  */
 
-const EMPTY_ARRAY = [];
+const EMPTY_SET = new Set();
+
+/**
+ * @param {SortableSet<ModuleGraphConnection>} set input
+ * @returns {readonly Map<Module, readonly ModuleGraphConnection[]>} mapped by origin module
+ */
+const getConnectionsByOriginModule = set => {
+	const map = new Map();
+	/** @type {Module | 0} */
+	let lastModule = 0;
+	/** @type {ModuleGraphConnection[]} */
+	let lastList = undefined;
+	for (const connection of set) {
+		const { originModule } = connection;
+		if (lastModule === originModule) {
+			lastList.push(connection);
+		} else {
+			lastModule = originModule;
+			const list = map.get(originModule);
+			if (list !== undefined) {
+				lastList = list;
+				list.push(connection);
+			} else {
+				const list = [connection];
+				lastList = list;
+				map.set(originModule, list);
+			}
+		}
+	}
+	return map;
+};
 
 class ModuleGraphModule {
 	constructor() {
-		/** @type {Set<ModuleGraphConnection>} */
-		this.incomingConnections = new Set();
+		/** @type {SortableSet<ModuleGraphConnection>} */
+		this.incomingConnections = new SortableSet();
 		/** @type {Set<ModuleGraphConnection> | undefined} */
 		this.outgoingConnections = undefined;
 		/** @type {Module | null} */
@@ -51,20 +82,9 @@ class ModuleGraphModule {
 	}
 }
 
-class ModuleGraphDependency {
-	constructor() {
-		/** @type {ModuleGraphConnection} */
-		this.connection = undefined;
-		/** @type {Module} */
-		this.parentModule = undefined;
-		/** @type {DependenciesBlock} */
-		this.parentBlock = undefined;
-	}
-}
-
 class ModuleGraph {
 	constructor() {
-		/** @type {Map<Dependency, ModuleGraphDependency>} */
+		/** @type {Map<Dependency, ModuleGraphConnection>} */
 		this._dependencyMap = new Map();
 		/** @type {Map<Module, ModuleGraphModule>} */
 		this._moduleMap = new Map();
@@ -80,6 +100,9 @@ class ModuleGraph {
 		this._cacheModuleGraphModuleValue2 = undefined;
 		this._cacheModuleGraphDependencyKey = undefined;
 		this._cacheModuleGraphDependencyValue = undefined;
+
+		/** @type {WeakTupleMap<any[], any>} */
+		this._cache = undefined;
 	}
 
 	/**
@@ -105,31 +128,13 @@ class ModuleGraph {
 
 	/**
 	 * @param {Dependency} dependency the dependency
-	 * @returns {ModuleGraphDependency} the internal dependency
-	 */
-	_getModuleGraphDependency(dependency) {
-		if (this._cacheModuleGraphDependencyKey === dependency)
-			return this._cacheModuleGraphDependencyValue;
-		let mgd = this._dependencyMap.get(dependency);
-		if (mgd === undefined) {
-			mgd = new ModuleGraphDependency();
-			this._dependencyMap.set(dependency, mgd);
-		}
-		this._cacheModuleGraphDependencyKey = dependency;
-		this._cacheModuleGraphDependencyValue = mgd;
-		return mgd;
-	}
-
-	/**
-	 * @param {Dependency} dependency the dependency
 	 * @param {DependenciesBlock} block parent block
 	 * @param {Module} module parent module
 	 * @returns {void}
 	 */
 	setParents(dependency, block, module) {
-		const mgd = this._getModuleGraphDependency(dependency);
-		mgd.parentBlock = block;
-		mgd.parentModule = module;
+		dependency._parentDependenciesBlock = block;
+		dependency._parentModule = module;
 	}
 
 	/**
@@ -137,8 +142,7 @@ class ModuleGraph {
 	 * @returns {Module} parent module
 	 */
 	getParentModule(dependency) {
-		const mgd = this._getModuleGraphDependency(dependency);
-		return mgd.parentModule;
+		return dependency._parentModule;
 	}
 
 	/**
@@ -146,8 +150,7 @@ class ModuleGraph {
 	 * @returns {DependenciesBlock} parent block
 	 */
 	getParentBlock(dependency) {
-		const mgd = this._getModuleGraphDependency(dependency);
-		return mgd.parentBlock;
+		return dependency._parentDependenciesBlock;
 	}
 
 	/**
@@ -165,8 +168,7 @@ class ModuleGraph {
 			dependency.weak,
 			dependency.getCondition(this)
 		);
-		const mgd = this._getModuleGraphDependency(dependency);
-		mgd.connection = connection;
+		this._dependencyMap.set(dependency, connection);
 		const connections = this._getModuleGraphModule(module).incomingConnections;
 		connections.add(connection);
 		const mgm = this._getModuleGraphModule(originModule);
@@ -182,12 +184,11 @@ class ModuleGraph {
 	 * @returns {void}
 	 */
 	updateModule(dependency, module) {
-		const mgd = this._getModuleGraphDependency(dependency);
-		if (mgd.connection.module === module) return;
-		const { connection } = mgd;
+		const connection = this._dependencyMap.get(dependency);
+		if (connection.module === module) return;
 		const newConnection = connection.clone();
 		newConnection.module = module;
-		mgd.connection = newConnection;
+		this._dependencyMap.set(dependency, newConnection);
 		connection.setActive(false);
 		const originMgm = this._getModuleGraphModule(connection.originModule);
 		originMgm.outgoingConnections.add(newConnection);
@@ -200,13 +201,12 @@ class ModuleGraph {
 	 * @returns {void}
 	 */
 	removeConnection(dependency) {
-		const mgd = this._getModuleGraphDependency(dependency);
-		const { connection } = mgd;
+		const connection = this._dependencyMap.get(dependency);
 		const targetMgm = this._getModuleGraphModule(connection.module);
 		targetMgm.incomingConnections.delete(connection);
 		const originMgm = this._getModuleGraphModule(connection.originModule);
 		originMgm.outgoingConnections.delete(connection);
-		mgd.connection = undefined;
+		this._dependencyMap.delete(dependency);
 	}
 
 	/**
@@ -215,7 +215,7 @@ class ModuleGraph {
 	 * @returns {void}
 	 */
 	addExplanation(dependency, explanation) {
-		const { connection } = this._getModuleGraphDependency(dependency);
+		const connection = this._dependencyMap.get(dependency);
 		connection.addExplanation(explanation);
 	}
 
@@ -319,9 +319,6 @@ class ModuleGraph {
 					newConnections.add(newConnection);
 					if (newConnection.module !== undefined) {
 						const otherMgm = this._getModuleGraphModule(newConnection.module);
-						if (otherMgm.incomingConnections === undefined) {
-							otherMgm.incomingConnections = new Set();
-						}
 						otherMgm.incomingConnections.add(newConnection);
 					}
 				}
@@ -344,7 +341,7 @@ class ModuleGraph {
 	 * @returns {Module} the referenced module
 	 */
 	getResolvedModule(dependency) {
-		const { connection } = this._getModuleGraphDependency(dependency);
+		const connection = this._dependencyMap.get(dependency);
 		return connection !== undefined ? connection.resolvedModule : null;
 	}
 
@@ -353,7 +350,7 @@ class ModuleGraph {
 	 * @returns {ModuleGraphConnection | undefined} the connection
 	 */
 	getConnection(dependency) {
-		const { connection } = this._getModuleGraphDependency(dependency);
+		const connection = this._dependencyMap.get(dependency);
 		return connection;
 	}
 
@@ -362,7 +359,7 @@ class ModuleGraph {
 	 * @returns {Module} the referenced module
 	 */
 	getModule(dependency) {
-		const { connection } = this._getModuleGraphDependency(dependency);
+		const connection = this._dependencyMap.get(dependency);
 		return connection !== undefined ? connection.module : null;
 	}
 
@@ -371,7 +368,7 @@ class ModuleGraph {
 	 * @returns {Module} the referencing module
 	 */
 	getOrigin(dependency) {
-		const { connection } = this._getModuleGraphDependency(dependency);
+		const connection = this._dependencyMap.get(dependency);
 		return connection !== undefined ? connection.originModule : null;
 	}
 
@@ -380,7 +377,7 @@ class ModuleGraph {
 	 * @returns {Module} the original referencing module
 	 */
 	getResolvedOrigin(dependency) {
-		const { connection } = this._getModuleGraphDependency(dependency);
+		const connection = this._dependencyMap.get(dependency);
 		return connection !== undefined ? connection.resolvedOriginModule : null;
 	}
 
@@ -399,7 +396,16 @@ class ModuleGraph {
 	 */
 	getOutgoingConnections(module) {
 		const connections = this._getModuleGraphModule(module).outgoingConnections;
-		return connections === undefined ? EMPTY_ARRAY : connections;
+		return connections === undefined ? EMPTY_SET : connections;
+	}
+
+	/**
+	 * @param {Module} module the module
+	 * @returns {readonly Map<Module, readonly ModuleGraphConnection[]>} reasons why a module is included, in a map by source module
+	 */
+	getIncomingConnectionsByOriginModule(module) {
+		const connections = this._getModuleGraphModule(module).incomingConnections;
+		return connections.getFromUnorderedCache(getConnectionsByOriginModule);
 	}
 
 	/**
@@ -655,6 +661,34 @@ class ModuleGraph {
 		return meta;
 	}
 
+	/**
+	 * @param {any} thing any thing
+	 * @returns {Object} metadata
+	 */
+	getMetaIfExisting(thing) {
+		return this._metaMap.get(thing);
+	}
+
+	freeze() {
+		this._cache = new WeakTupleMap();
+	}
+
+	unfreeze() {
+		this._cache = undefined;
+	}
+
+	/**
+	 * @template {any[]} T
+	 * @template V
+	 * @param {(moduleGraph: ModuleGraph, ...args: T) => V} fn computer
+	 * @param {T} args arguments
+	 * @returns {V} computed value or cached
+	 */
+	cached(fn, ...args) {
+		if (this._cache === undefined) return fn(this, ...args);
+		return this._cache.provide(fn, ...args, () => fn(this, ...args));
+	}
+
 	// TODO remove in webpack 6
 	/**
 	 * @param {Module} module the module
@@ -694,6 +728,15 @@ class ModuleGraph {
 	 */
 	static setModuleGraphForModule(module, moduleGraph) {
 		moduleGraphForModuleMap.set(module, moduleGraph);
+	}
+
+	// TODO remove in webpack 6
+	/**
+	 * @param {Module} module the module
+	 * @returns {void}
+	 */
+	static clearModuleGraphForModule(module) {
+		moduleGraphForModuleMap.delete(module);
 	}
 }
 

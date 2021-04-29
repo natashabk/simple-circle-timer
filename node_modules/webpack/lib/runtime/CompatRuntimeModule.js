@@ -11,7 +11,7 @@ const RuntimeModule = require("../RuntimeModule");
 
 class CompatRuntimeModule extends RuntimeModule {
 	constructor() {
-		super("compat", 10);
+		super("compat", RuntimeModule.STAGE_ATTACH);
 		this.fullHash = true;
 	}
 
@@ -19,9 +19,8 @@ class CompatRuntimeModule extends RuntimeModule {
 	 * @returns {string} runtime code
 	 */
 	generate() {
-		const { chunk, compilation } = this;
+		const { chunkGraph, chunk, compilation } = this;
 		const {
-			chunkGraph,
 			runtimeTemplate,
 			mainTemplate,
 			moduleTemplates,

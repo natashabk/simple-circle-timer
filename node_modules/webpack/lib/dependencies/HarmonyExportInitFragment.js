@@ -7,6 +7,7 @@
 
 const InitFragment = require("../InitFragment");
 const RuntimeGlobals = require("../RuntimeGlobals");
+const { first } = require("../util/SetHelpers");
 
 /** @typedef {import("webpack-sources").Source} Source */
 /** @typedef {import("../Generator").GenerateContext} GenerateContext */
@@ -45,6 +46,53 @@ class HarmonyExportInitFragment extends InitFragment {
 		this.exportsArgument = exportsArgument;
 		this.exportMap = exportMap;
 		this.unusedExports = unusedExports;
+	}
+
+	/**
+	 * @param {HarmonyExportInitFragment[]} fragments all fragments to merge
+	 * @returns {HarmonyExportInitFragment} merged fragment
+	 */
+	mergeAll(fragments) {
+		let exportMap;
+		let exportMapOwned = false;
+		let unusedExports;
+		let unusedExportsOwned = false;
+
+		for (const fragment of fragments) {
+			if (fragment.exportMap.size !== 0) {
+				if (exportMap === undefined) {
+					exportMap = fragment.exportMap;
+					exportMapOwned = false;
+				} else {
+					if (!exportMapOwned) {
+						exportMap = new Map(exportMap);
+						exportMapOwned = true;
+					}
+					for (const [key, value] of fragment.exportMap) {
+						if (!exportMap.has(key)) exportMap.set(key, value);
+					}
+				}
+			}
+			if (fragment.unusedExports.size !== 0) {
+				if (unusedExports === undefined) {
+					unusedExports = fragment.unusedExports;
+					unusedExportsOwned = false;
+				} else {
+					if (!unusedExportsOwned) {
+						unusedExports = new Set(unusedExports);
+						unusedExportsOwned = true;
+					}
+					for (const value of fragment.unusedExports) {
+						unusedExports.add(value);
+					}
+				}
+			}
+		}
+		return new HarmonyExportInitFragment(
+			this.exportsArgument,
+			exportMap,
+			unusedExports
+		);
 	}
 
 	merge(other) {
@@ -91,9 +139,7 @@ class HarmonyExportInitFragment extends InitFragment {
 						this.unusedExports
 				  )} */\n`
 				: this.unusedExports.size > 0
-				? `/* unused harmony export ${
-						this.unusedExports.values().next().value
-				  } */\n`
+				? `/* unused harmony export ${first(this.unusedExports)} */\n`
 				: "";
 		const definitions = [];
 		for (const [key, value] of this.exportMap) {
