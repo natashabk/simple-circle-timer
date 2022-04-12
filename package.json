@@ -41,15 +41,11 @@
     "@testing-library/jest-dom": "^5.11.6",
     "@testing-library/react": "^11.2.2",
     "babel-loader": "^8.2.2",
-    "browserslist": "^4.16.5",
     "css-loader": "^5.0.1",
-    "elliptic": "^6.5.4",
     "jest": "^26.6.3",
     "jest-cli": "^26.6.3",
-    "node-notifier": "^8.0.1",
     "prop-types": "^15.7.2",
     "react": "^17.0.1",
-    "react-dev-utils": "^11.0.4",
     "react-dom": "^17.0.1",
     "regenerator-runtime": "^0.13.7",
     "style-loader": "^2.0.0",
@@ -59,12 +55,6 @@
   "peerDependencies": {
     "react": "^17.0.1",
     "react-dom": "^17.0.1"
-  },
-  "dependencies": {
-    "glob-parent": "^5.1.2",
-    "immer": "^9.0.6",
-    "is-svg": "^4.2.2",
-    "ssri": "^6.0.2"
   },
   "jest": {
     "moduleNameMapper": {
